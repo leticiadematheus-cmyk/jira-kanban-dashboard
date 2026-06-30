@@ -96,7 +96,7 @@ def search_all_issues(jql):
             "jql": jql,
             "maxResults": 100,
             "fields": ["created", "labels", "status", "summary"],
-            "expand": ["changelog"],
+            "expand": "changelog",
         }
         if next_page_token:
             body["nextPageToken"] = next_page_token
