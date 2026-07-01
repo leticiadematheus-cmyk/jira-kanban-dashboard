@@ -216,6 +216,17 @@ def calc_backlog_age_days(issue, now):
     return round(total_days, 2)
 
 
+def get_created(issue):
+    return parse_datetime(issue["fields"]["created"])
+
+
+def get_concluded_at(issue):
+    """Retorna a data (datetime) da última transição para 'Concluído', ou None."""
+    transitions = extract_status_transitions(issue)
+    concluded_dates = [ts for ts, _f, to in transitions if to == STATUS_CONCLUIDO]
+    return max(concluded_dates) if concluded_dates else None
+
+
 def calc_lead_time_days(issue):
     transitions = extract_status_transitions(issue)
     created = parse_datetime(issue["fields"]["created"])
@@ -338,14 +349,27 @@ def main():
         timeline = build_status_timeline(issue, now)
         all_timelines.append(timeline)
 
+        # Datas de referência usadas para o filtro de período no dashboard.
+        # Cada métrica é ancorada na data que faz sentido para ela:
+        #   - idade_backlog / total  -> data de criação
+        #   - lead_time / cycle_time -> data de conclusão
+        #   - tempo_refinar          -> data em que a label "refinado" foi adicionada
+        created_dt = get_created(issue)
+        concluded_dt = get_concluded_at(issue)
+        refined_dt = extract_label_added_date(issue, LABEL_REFINADO)
+
+        created_ref = created_dt.date().isoformat()
+        concluded_ref = concluded_dt.date().isoformat() if concluded_dt else None
+        refined_ref = refined_dt.date().isoformat() if refined_dt else None
+
         if b_age is not None:
-            backlog_age.append({"key": key, "dias": b_age, "prioridade": priority})
+            backlog_age.append({"key": key, "dias": b_age, "prioridade": priority, "data_ref": created_ref})
         if l_time is not None:
-            lead_time.append({"key": key, "dias": l_time, "prioridade": priority})
+            lead_time.append({"key": key, "dias": l_time, "prioridade": priority, "data_ref": concluded_ref})
         if c_time is not None:
-            cycle_time.append({"key": key, "dias": c_time, "prioridade": priority})
+            cycle_time.append({"key": key, "dias": c_time, "prioridade": priority, "data_ref": concluded_ref})
         if t_refinar is not None:
-            tempo_refinar.append({"key": key, "dias": t_refinar, "prioridade": priority})
+            tempo_refinar.append({"key": key, "dias": t_refinar, "prioridade": priority, "data_ref": refined_ref})
 
         issue_rows.append({
             "key": key,
@@ -355,6 +379,8 @@ def main():
             "parent_key": parent_key,
             "parent_summary": parent_summary,
             "prioridade": priority,
+            "created": created_ref,
+            "concluido_em": concluded_ref,
             "backlog_age_dias": b_age,
             "lead_time_dias": l_time,
             "cycle_time_dias": c_time,
